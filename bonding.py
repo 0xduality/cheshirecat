@@ -1,3 +1,4 @@
+import decimal
 from wallet import Wallet
 from utils import get_contract
 
@@ -6,8 +7,8 @@ from web3.middleware import geth_poa_middleware
 w3 = Web3(Web3.WebsocketProvider('wss://api.avax.network/ext/bc/C/ws'))
 w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
-autobond = '0x64457da2701dD638D9fc451F9FbE88B4485Aa6C8'
-abi = [
+autobond_address = '0x35504B2Fdc33E91a92EE29084DD37dAFCB3b5850'
+autobond_abi = [
     {
       "inputs": [],
       "stateMutability": "nonpayable",
@@ -19,6 +20,11 @@ abi = [
           "internalType": "address",
           "name": "_token",
           "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_minimum",
+          "type": "uint256"
         }
       ],
       "name": "mintWithERC20",
@@ -32,6 +38,11 @@ abi = [
           "internalType": "address",
           "name": "_token",
           "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_minimum",
+          "type": "uint256"
         }
       ],
       "name": "mintWithLP",
@@ -41,17 +52,17 @@ abi = [
     }
   ]
 
-autobond_contract = w3.eth.contract(address=autobond, abi=abi)
+autobond = w3.eth.contract(address=autobond_address, abi=autobond_abi)
 
 addys = {
-    'MIM': '0x130966628846BFd36ff31a822705796e8cb8C18D',
     'MEMO': '0x136Acd46C134E8269052c62A67042D6bDeDde3C9',
-    'TIME': '0xb54f16fB19478766A268F172C9480f8da1a7c9C3',
-    'WAVAX': '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7',
     'MIMLP': '0x113f413371fC4CC4C9d6416cf1DE9dFd7BF747Df',
-    'WAVAXLP': '0xf64e1c5B6E17031f5504481Ac8145F4c3eab4917',
     'STAKE': '0x4456B87Af11e87E329AB7d7C7A246ed1aC2168B9',
-    'JOEROUTER': '0x60aE616a2155Ee3d9A68541Ba4544862310933d4', 
+    'MIM': '0x130966628846BFd36ff31a822705796e8cb8C18D',
+    'WAVAX': '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7',
+#    'TIME': '0xb54f16fB19478766A268F172C9480f8da1a7c9C3',
+#    'WAVAXLP': '0xf64e1c5B6E17031f5504481Ac8145F4c3eab4917',
+#    'JOEROUTER': '0x60aE616a2155Ee3d9A68541Ba4544862310933d4', 
 }
 
 bonds = {
@@ -81,7 +92,7 @@ def best_roi():
     avax_price = None
     for k in bonds:
         depo = get_contract(w3, bonds[k])
-        prices[k] = depo.functions.bondPriceInUSD().call()/1e18
+        prices[k] = depo.functions.bondPriceInUSD().call() / 1e18
         if k == 'WAVAX':
             avax_price = depo.functions.assetPrice().call() / 1e8
     prices['WAVAXLP'] *= avax_price
@@ -91,12 +102,11 @@ def best_roi():
     rebase = get_rebase()
     claim_and_stake_roi = ((1+rebase)**16-1-rebase)/(15*rebase)
     final_roi = initial_roi * claim_and_stake_roi
-    stake_roi = (1 + rebase)**15 
-    print(stake_roi, final_roi, best_bond)
+    stake_roi = (1 + rebase)**15
     if stake_roi > final_roi:
-        return stake_roi, None
+        return stake_roi, None, None
     else:
-        return final_roi, best_bond
+        return final_roi, initial_roi, best_bond
 
 
 def approve(token, wallet, spender):
@@ -106,22 +116,38 @@ def approve(token, wallet, spender):
     if allowance < infinite//2:
         approval = contract.functions.approve(spender, infinite)
         wallet.transact(approval, gas=50000)
-    
+
+
+def get_minimum(w3, wallet, initial_roi):
+    memo = get_contract(w3, addys['MEMO'])
+    balance = memo.functions.balanceOf(wallet.address).call()
+    print('balance', balance)
+    context = decimal.Context(prec=5, rounding=decimal.ROUND_DOWN)
+    num, denom = context.create_decimal_from_float(initial_roi).as_integer_ratio() 
+    return (balance * num * 99) // (100 * denom)
+
 
 def main():
-    dry_run = True
+    dry_run = False
     wallet = Wallet(w3)
-    approve(addys['MEMO'], wallet, autobond)
-    roi, collateral = best_roi()
+    approve(addys['MEMO'], wallet, autobond_address)
+    final_roi, initial_roi, collateral = best_roi()
     if collateral is None:
         return
     if dry_run:
         return
+    depo = get_contract(w3, bonds[collateral])
+    #vested = depo.functions.percentVestedFor(wallet.address).call()
+    _, _, _, vesting = depo.functions.bondInfo(wallet.address).call()
+    if vesting > 8 * 3600:
+        print(f'existing {collateral} bond not close to vested')
+        return
+    minimum = get_minimum(w3, wallet, initial_roi)
     if collateral.endswith('LP'):
-        tx = autobond_contract.functions.mintWithLP(addys[collateral[:-2]], 0)
+        tx = autobond.functions.mintWithLP(addys[collateral[:-2]], minimum)
         wallet.transact(tx)
     else:
-        tx = autobond_contract.functions.mintWithERC20(addys[collateral], 0)
+        tx = autobond.functions.mintWithERC20(addys[collateral], minimum)
         wallet.transact(tx)
     
 

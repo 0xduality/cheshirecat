@@ -60,5 +60,5 @@ class Wallet:
             tx_params.update(gas=2 * gas)
         tx = function.buildTransaction(tx_params)
         signed = self.w3.eth.account.sign_transaction(tx, self.private_key)
-        tx_hash = self.w3.eth.send_raw_transaction(signed.rawTransaction)
-        self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        #tx_hash = self.w3.eth.send_raw_transaction(signed.rawTransaction)
+        #self.w3.eth.wait_for_transaction_receipt(tx_hash)
