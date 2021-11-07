@@ -135,7 +135,6 @@ def best_roi(wallet):
     claim_and_stake_roi = ((1+rebase)**16-1-rebase)/(15*rebase)
     final_roi = initial_roi * claim_and_stake_roi
     stake_roi = (1 + rebase)**15
-    print(f'{stake_roi:.4f} {final_roi:.4f} {initial_roi:.4f} {best_bond}')
     if stake_roi > final_roi:
         return stake_roi, stake_roi, 1.0, None
     else:
@@ -170,12 +169,12 @@ def main(argv):
     approve(addys['MEMO'], wallet, autobond_address)
 
     print(wallet.address)
-    initial_roi = 1
     stake_roi = 10.
-    discount = 0.995
-    while initial_roi < discount * stake_roi:
+    final_roi = 0
+    factor = 1.04
+    while final_roi < factor * stake_roi:
         stake_roi, final_roi, initial_roi, collateral = best_roi(wallet)
-        print(f'{initial_roi:.4f} {(discount * stake_roi):.4f}')
+        print(f'{stake_roi:.4f} {initial_roi:.4f} {final_roi:.4f} {(factor * stake_roi):.4f} {collateral}')
         time.sleep(5)
 
     if collateral is None:
