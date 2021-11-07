@@ -145,7 +145,7 @@ contract Autobond {
     }
 
 
-    function _mintBond(address _token, address _beneficiary, uint256 _minimum) internal 
+    function _mintBond(address _token, address _beneficiary) internal returns (uint256)
     {
         uint256 amount = IERC20(_token).balanceOf(address(this));
         address depo = bond[_token];
@@ -155,32 +155,16 @@ contract Autobond {
         IDepository(depo).deposit(amount, price, _beneficiary);
         (uint256 payoutAfter,,,) = IDepository(depo).bondInfo(_beneficiary);
         uint256 payout = payoutAfter - payoutBefore;
-        require (payout >= _minimum, "insufficient profit, either ROI plummeted or your minimum is too high");
+        return payout;
     }
 
-    
-    function _intSqrt(uint256 _s, uint256 _initial) internal pure returns (uint256)
-    {
-        uint256 x = _initial;
-        x = (x + _s/x) >> 1;
-        x = (x + _s/x) >> 1;
-        x = (x + _s/x) >> 1;
-        x = (x + _s/x) >> 1;
-        x = (x + _s/x) >> 1;
-        x = (x + _s/x) >> 1;
-        x = (x + _s/x) >> 1;
-        return x;
 
-    }
-
-    
     function _zap(uint256 _reserve, uint256 _mine) internal pure returns (uint256)
     {
-        uint256 s = 997 * _reserve * (_reserve + _mine) / 1000;
-        uint256 guess = _intSqrt(s, _reserve);
-        if (guess * guess > s)
-            guess = s / guess;
-        return guess > _reserve ? guess - _reserve : _mine / 2;
+        uint256 guess = _mine / 2;
+        guess = (guess * guess + _reserve * _mine) / (2 * (_reserve + guess));
+        guess = (guess * guess + _reserve * _mine) / (2 * (_reserve + guess));
+        return guess;
     }
 
 
@@ -208,22 +192,17 @@ contract Autobond {
         IERC20(memo).transferFrom(_beneficiary, address(this), amount);
     }
 
-
-    function mintWithERC20(address _token, uint256 _minimum) public
+    function payoutForERC20(address _token) public returns (uint256) 
     {
         address beneficiary = msg.sender;
         _transferIn(beneficiary);
         _unstake();
         uint256 amount = IERC20(time).balanceOf(address(this));
         _swapTime(_token, amount);
-        _mintBond(_token, beneficiary, _minimum);
-        _refundLeftovers(_token, beneficiary);
-        _refundLeftovers(time, beneficiary);
-
+        return _mintBond(_token, beneficiary);
     }
 
-
-    function mintWithLP(address _token, uint256 _minimum) public
+    function payoutForLP(address _token) public returns (uint256) 
     {
         address beneficiary = msg.sender;
         _transferIn(beneficiary);
@@ -233,7 +212,25 @@ contract Autobond {
         uint256 sell = _zap(rtime, amount);
         _swapTime(_token, sell);
         _mintLP(_token);
-        _mintBond(lp[_token], beneficiary, _minimum);
+        return _mintBond(lp[_token], beneficiary);
+    }
+
+    function mintWithERC20(address _token, uint256 _minimum) public
+    {
+        address beneficiary = msg.sender;
+        uint256 payout = payoutForERC20(_token);
+        require (payout >= _minimum, "insufficient profit, either ROI plummeted or your minimum is too high");
+        _refundLeftovers(_token, beneficiary);
+        _refundLeftovers(time, beneficiary);
+
+    }
+
+
+    function mintWithLP(address _token, uint256 _minimum) public
+    {
+        address beneficiary = msg.sender;
+        uint256 payout = payoutForLP(_token);
+        require (payout >= _minimum, "insufficient profit, either ROI plummeted or your minimum is too high");
         _refundLeftovers(_token, beneficiary);
         _refundLeftovers(time, beneficiary);
     }

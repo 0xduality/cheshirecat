@@ -26,8 +26,10 @@ def make_account():
     return addy, key
 
 
-def get_account():
-    with open('account','r') as inp:
+def get_account(fn=None):
+    if fn is None:
+        fn = 'account'
+    with open(fn,'r') as inp:
         addy = decode(inp.readline())
         key = decode(inp.readline())
     key = hexfix(key)
@@ -36,15 +38,16 @@ def get_account():
 
 
 class Wallet:
-    def __init__(self, web3):
+    def __init__(self, web3, fn=None):
         self.w3 = web3
+        self.fn = fn
         try:
-            self.address, self.private_key = get_account()
+            self.address, self.private_key = get_account(self.fn)
         except Exception as e:
             print(e)
             self.address, self.private_key = make_account()
 
-    def transact(self, function, **kwds):
+    def _prep(self, function, **kwds):
         block = self.w3.eth.get_block('latest')
         tx_params = dict(
             type=2,
@@ -58,7 +61,16 @@ class Wallet:
         if 'gas' not in tx_params:
             gas = function.estimateGas(tx_params)
             tx_params.update(gas=2 * gas)
+        return tx_params
+
+    def transact(self, function, **kwds):
+        tx_params = self._prep(function, **kwds)
         tx = function.buildTransaction(tx_params)
         signed = self.w3.eth.account.sign_transaction(tx, self.private_key)
-        #tx_hash = self.w3.eth.send_raw_transaction(signed.rawTransaction)
-        #self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        tx_hash = self.w3.eth.send_raw_transaction(signed.rawTransaction)
+        rcpt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        print('tx successful' if rcpt.status==1 else 'tx failed')
+    
+    def call(self, function, **kwargs):
+        tx_params = self._prep(function, **kwargs)
+        return function.call(tx_params)
