@@ -17,5 +17,5 @@ def get_abi(addy):
     return abi
 
 def get_contract(w3, addy):
-    return w3.eth.contract(address=addy, abi=get_abi2(addy))
+    return w3.eth.contract(address=addy, abi=get_abi(addy))
 
