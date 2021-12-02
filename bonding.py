@@ -5,7 +5,8 @@ from utils import get_contract
 
 from web3 import Web3
 from web3.middleware import geth_poa_middleware
-w3 = Web3(Web3.WebsocketProvider('wss://api.avax.network/ext/bc/C/ws'))
+#w3 = Web3(Web3.WebsocketProvider('wss://api.avax.network/ext/bc/C/ws'))
+w3 = Web3(Web3.HTTPProvider('https://api.avax.network/ext/bc/C/rpc'))
 w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
 autobond_address = '0x73cDbB40fd311D290cc0B6b222f2d51D447a3d56'
@@ -96,6 +97,7 @@ autobond = w3.eth.contract(address=autobond_address, abi=autobond_abi)
 
 addys = {
     'MEMO': '0x136Acd46C134E8269052c62A67042D6bDeDde3C9',
+    'sSB': '0xE9Eb40d52CE4744322204d4a29Af63C30f0260a4',
     'MIMLP': '0x113f413371fC4CC4C9d6416cf1DE9dFd7BF747Df',
     'STAKE': '0x4456B87Af11e87E329AB7d7C7A246ed1aC2168B9',
     'MIM': '0x130966628846BFd36ff31a822705796e8cb8C18D',
@@ -163,7 +165,7 @@ def get_minimum(w3, wallet, initial_roi):
 
 
 def main(argv):
-    dry_run = False
+    dry_run = True
     account = argv[1] if len(argv) > 1 else 'account'
     wallet = Wallet(w3, account)
     approve(addys['MEMO'], wallet, autobond_address)
@@ -172,7 +174,8 @@ def main(argv):
     stake_roi = 10.
     final_roi = 0
     factor = 1.04
-    while final_roi < factor * stake_roi:
+    initial_roi = 0
+    while initial_roi < 1.082:
         stake_roi, final_roi, initial_roi, collateral = best_roi(wallet)
         print(f'{stake_roi:.4f} {initial_roi:.4f} {final_roi:.4f} {(factor * stake_roi):.4f} {collateral}')
         time.sleep(5)

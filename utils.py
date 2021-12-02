@@ -10,16 +10,12 @@ def get_abi(addy):
             abi = json.loads(inp.read())
     except Exception as e:
         print(e)
-        r = requests.get(f'https://cchain.explorer.avax.network/address/{addy}/contracts')
-        soup = BeautifulSoup(r.text)
-        buttons = soup.find_all('button', string=re.compile("\s*Copy ABI\s*"))
-        assert len(buttons)==1
-        text = buttons[0]['data-clipboard-text']
-        abi = json.loads(text)
+        resp = requests.get(f'https://api.snowtrace.io/api?module=contract&action=getabi&address={addy}')
+        abi = resp.json()['result']
         with open(cache, 'w') as out:
-            out.write(json.dumps(abi))
+            out.write(json.dumps(abi, indent=True))
     return abi
 
-
 def get_contract(w3, addy):
-    return w3.eth.contract(address=addy, abi=get_abi(addy))
+    return w3.eth.contract(address=addy, abi=get_abi2(addy))
+
