@@ -376,7 +376,7 @@ def main(argv):
 
     if dry_run:
         best_asset, roi, amt, payout = best_bond(wallet)
-        print(best_asset, roi, payout, amt)
+        print(best_asset, roi, payout, amt, payout/amt if amt > 0 else roi)
     else:
         purchase(wallet)
     contract_state()
